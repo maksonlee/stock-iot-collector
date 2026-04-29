@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stock-iot-collector
+  namespace: stock
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stock-iot-collector
+  template:
+    metadata:
+      labels:
+        app: stock-iot-collector
+    spec:
+      containers:
+        - name: stock-iot-collector
+          image: cdlee/stock-iot-collector:0.1.0
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: POLYGON_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stock-iot-collector-secret
+                  key: POLYGON_API_KEY
+
+            - name: THINGSBOARD_MQTT_CA_CERT
+              value: /etc/stock-iot-collector/certs/ca.crt
+
+            - name: THINGSBOARD_MQTT_CLIENT_CERT
+              value: /etc/stock-iot-collector/certs/client.crt
+
+            - name: THINGSBOARD_MQTT_CLIENT_KEY
+              value: /etc/stock-iot-collector/certs/client.key
+
+          envFrom:
+            - configMapRef:
+                name: stock-iot-collector-config
+
+          volumeMounts:
+            - name: stock-config
+              mountPath: /etc/stock-iot-collector/stocks.yaml
+              subPath: stocks.yaml
+              readOnly: true
+
+            - name: mqtt-certs
+              mountPath: /etc/stock-iot-collector/certs
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+      volumes:
+        - name: stock-config
+          configMap:
+            name: stock-iot-collector-config
+            items:
+              - key: stocks.yaml
+                path: stocks.yaml
+
+        - name: mqtt-certs
+          secret:
+            secretName: stock-iot-collector-secret
+            items:
+              - key: ca.crt
+                path: ca.crt
+              - key: client.crt
+                path: client.crt
+              - key: client.key
+                path: client.key

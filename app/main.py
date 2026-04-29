@@ -1,0 +1,80 @@
+import logging
+import signal
+import sys
+from types import FrameType
+
+from app.collector import StockCollector
+from app.config import load_app_config, load_stock_config
+from app.providers.polygon import PolygonProvider
+from app.sinks.thingsboard import ThingsBoardGatewaySink
+from app.utils.time_utils import sleep_for_interval
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+_should_stop = False
+
+
+def _is_stopping() -> bool:
+    return _should_stop
+
+
+def _handle_signal(signum: int, frame: FrameType | None) -> None:
+    global _should_stop
+    logger.info("Received signal %s, stopping...", signum)
+    _should_stop = True
+
+
+def main() -> int:
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
+    config = load_app_config()
+    stocks = load_stock_config(config.stock_config_path)
+
+    logger.info("Loaded %s stock(s), polygon_timespan=%s", len(stocks), config.polygon_timespan)
+
+    provider = PolygonProvider(api_key=config.polygon_api_key)
+    sink = ThingsBoardGatewaySink(
+        host=config.thingsboard_mqtt_host,
+        port=config.thingsboard_mqtt_port,
+        client_id=config.thingsboard_mqtt_client_id,
+        ca_cert=config.thingsboard_mqtt_ca_cert,
+        client_cert=config.thingsboard_mqtt_client_cert,
+        client_key=config.thingsboard_mqtt_client_key,
+        keepalive_seconds=config.mqtt_keepalive_seconds,
+    )
+
+    collector = StockCollector(
+        stocks=stocks,
+        provider=provider,
+        sink=sink,
+        delay_minutes=config.delay_minutes,
+        polygon_timespan=config.polygon_timespan,
+        publish_chunk_size=config.publish_chunk_size,
+        daily_market_days_ago=config.daily_market_days_ago,
+    )
+
+    sink.connect()
+    logger.info("Connected to ThingsBoard MQTT host=%s port=%s", config.thingsboard_mqtt_host, config.thingsboard_mqtt_port)
+
+    try:
+        while not _should_stop:
+            collector.run_once()
+            if _should_stop:
+                break
+            logger.info("Sleeping for %s second(s)", config.poll_interval_seconds)
+            sleep_for_interval(config.poll_interval_seconds, should_stop=_is_stopping)
+    finally:
+        sink.disconnect()
+        logger.info("Stopped")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
