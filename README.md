@@ -229,7 +229,7 @@ kubectl logs -n stock -l app=stock-iot-collector -f
 Healthy logs look like:
 
 ```text
-Loaded ... stock(s), polygon_timespan=day
+Loaded ... stock(s), daily mode
 MQTT connection accepted: Success
 Connected to ThingsBoard MQTT host=...
 Published telemetry for ... stock(s)
@@ -265,11 +265,9 @@ Optional environment variables:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `STOCK_CONFIG_PATH` | `./config/stocks.yaml` locally, otherwise `/etc/stock-iot-collector/stocks.yaml` | Stock config path. |
-| `POLYGON_TIMESPAN` | `day` | `day` for daily bars or `minute` for minute bars. Minute bars may require a paid Polygon plan. |
-| `DAILY_MARKET_DAYS_AGO` | `1` | In daily mode, collect the previous N U.S. market weekdays. |
+| `DAILY_MARKET_DAYS_AGO` | `1` | Collect the previous N U.S. market weekdays. |
 | `POLL_INTERVAL_SECONDS` | `3600` | How often the collector runs. |
 | `PUBLISH_CHUNK_SIZE` | `50` | Number of virtual devices per MQTT gateway telemetry message. Lower this if ThingsBoard is under pressure. |
-| `DELAY_MINUTES` | `20` | Used by `POLYGON_TIMESPAN=minute`; ignored by daily target-date selection. |
 | `THINGSBOARD_MQTT_PORT` | `8883` | MQTT TLS port. |
 | `THINGSBOARD_MQTT_CLIENT_ID` | `stock-collector-01` | MQTT client id. |
 | `MQTT_KEEPALIVE_SECONDS` | `60` | MQTT keepalive. |
@@ -322,10 +320,9 @@ Payload example:
         "high": 173.5,
         "low": 173.1,
         "close": 173.4,
+        "price": 173.4,
         "volume": 1200345,
         "source": "polygon",
-        "delay_minutes": 20,
-        "aggregate_timespan": "day",
         "bar_timestamp_ms": 1777320000000
       }
     }

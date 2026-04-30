@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from app.providers.polygon import MARKET_TIMEZONE, PolygonProvider
 from app.sinks.thingsboard import ThingsBoardGatewaySink
-from app.utils.time_utils import previous_weekday_market_time, target_minute_utc, utc_now_floor_minute
+from app.utils.time_utils import previous_weekday_market_time, utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -19,8 +19,6 @@ class StockCollector:
         stocks: list[dict[str, Any]],
         provider: PolygonProvider,
         sink: ThingsBoardGatewaySink,
-        delay_minutes: int,
-        polygon_timespan: str,
         publish_chunk_size: int,
         daily_market_days_ago: int,
         should_stop: Callable[[], bool] | None = None,
@@ -28,8 +26,6 @@ class StockCollector:
         self.stocks = stocks
         self.provider = provider
         self.sink = sink
-        self.delay_minutes = delay_minutes
-        self.polygon_timespan = polygon_timespan
         self.publish_chunk_size = publish_chunk_size
         self.daily_market_days_ago = daily_market_days_ago
         self.should_stop = should_stop
@@ -70,15 +66,14 @@ class StockCollector:
             device_name = stock["device_name"]
 
             try:
-                bar = self.provider.fetch_bar(symbol, target_time, self.polygon_timespan)
+                bar = self.provider.fetch_daily_bar(symbol, target_time)
             except Exception:
-                logger.exception("Failed to fetch %s bar for symbol=%s", self.polygon_timespan, symbol)
+                logger.exception("Failed to fetch daily bar for symbol=%s", symbol)
                 continue
 
             if bar is None:
                 logger.warning(
-                    "No %s bar found for symbol=%s target_time=%s",
-                    self.polygon_timespan,
+                    "No daily bar found for symbol=%s target_time=%s",
                     symbol,
                     target_time.isoformat(),
                 )
@@ -94,9 +89,6 @@ class StockCollector:
         return payload
 
     def _build_all_stocks_payload(self, target_time: datetime) -> dict[str, list[dict[str, Any]]]:
-        if self.polygon_timespan != "day":
-            raise RuntimeError("All-stock collection is only supported with POLYGON_TIMESPAN=day")
-
         try:
             bars = self.provider.fetch_grouped_daily_bars(target_time)
         except Exception:
@@ -129,8 +121,6 @@ class StockCollector:
             "price": bar.close,
             "volume": bar.volume,
             "source": "polygon",
-            "delay_minutes": self.delay_minutes,
-            "aggregate_timespan": self.polygon_timespan,
             "bar_timestamp_ms": bar.timestamp_ms,
         }
 
@@ -171,14 +161,11 @@ class StockCollector:
         return any(stock["symbol"] in {"*", "ALL"} for stock in self.stocks)
 
     def _target_time_utc(self) -> datetime:
-        if self.polygon_timespan == "day":
-            return previous_weekday_market_time(
-                utc_now_floor_minute(),
-                MARKET_TIMEZONE,
-                self.daily_market_days_ago,
-            )
-
-        return target_minute_utc(self.delay_minutes)
+        return previous_weekday_market_time(
+            utc_now(),
+            MARKET_TIMEZONE,
+            self.daily_market_days_ago,
+        )
 
     def _telemetry_timestamp_ms(self, target_time: datetime, bar_timestamp_ms: int) -> int:
         return bar_timestamp_ms

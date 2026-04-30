@@ -5,9 +5,7 @@ metadata:
   namespace: stock
 data:
   STOCK_CONFIG_PATH: /etc/stock-iot-collector/stocks.yaml
-  POLYGON_TIMESPAN: "day"
   DAILY_MARKET_DAYS_AGO: "1"
-  DELAY_MINUTES: "20"
   POLL_INTERVAL_SECONDS: "3600"
   PUBLISH_CHUNK_SIZE: "50"
   THINGSBOARD_MQTT_HOST: "thingsboard.example.com"

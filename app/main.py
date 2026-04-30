@@ -40,7 +40,7 @@ def main() -> int:
     config = load_app_config()
     stocks = load_stock_config(config.stock_config_path)
 
-    logger.info("Loaded %s stock(s), polygon_timespan=%s", len(stocks), config.polygon_timespan)
+    logger.info("Loaded %s stock(s), daily mode", len(stocks))
 
     provider = PolygonProvider(api_key=config.polygon_api_key)
     sink = ThingsBoardGatewaySink(
@@ -57,8 +57,6 @@ def main() -> int:
         stocks=stocks,
         provider=provider,
         sink=sink,
-        delay_minutes=config.delay_minutes,
-        polygon_timespan=config.polygon_timespan,
         publish_chunk_size=config.publish_chunk_size,
         daily_market_days_ago=config.daily_market_days_ago,
         should_stop=_is_stopping,

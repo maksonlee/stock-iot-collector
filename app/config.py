@@ -11,9 +11,7 @@ class AppConfig:
     polygon_api_key: str
     stock_config_path: str
 
-    delay_minutes: int
     poll_interval_seconds: int
-    polygon_timespan: str
     publish_chunk_size: int
     daily_market_days_ago: int
 
@@ -46,10 +44,6 @@ def _get_int_env(name: str, default: int) -> int:
 
 
 def load_app_config() -> AppConfig:
-    polygon_timespan = os.getenv("POLYGON_TIMESPAN", "day").lower()
-    if polygon_timespan not in {"minute", "day"}:
-        raise RuntimeError("Environment variable POLYGON_TIMESPAN must be 'minute' or 'day'")
-
     default_stock_config_path = "./config/stocks.yaml"
     if not Path(default_stock_config_path).exists():
         default_stock_config_path = "/etc/stock-iot-collector/stocks.yaml"
@@ -60,9 +54,7 @@ def load_app_config() -> AppConfig:
             "STOCK_CONFIG_PATH",
             default_stock_config_path,
         ),
-        delay_minutes=_get_int_env("DELAY_MINUTES", 20),
         poll_interval_seconds=_get_int_env("POLL_INTERVAL_SECONDS", 3600),
-        polygon_timespan=polygon_timespan,
         publish_chunk_size=_get_int_env("PUBLISH_CHUNK_SIZE", 50),
         daily_market_days_ago=_get_int_env("DAILY_MARKET_DAYS_AGO", 1),
         thingsboard_mqtt_host=_get_required_env("THINGSBOARD_MQTT_HOST"),
