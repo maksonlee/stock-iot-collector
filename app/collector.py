@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from collections.abc import Callable
 from typing import Any
 
 from app.providers.polygon import MARKET_TIMEZONE, PolygonProvider
@@ -22,6 +23,7 @@ class StockCollector:
         polygon_timespan: str,
         publish_chunk_size: int,
         daily_market_days_ago: int,
+        should_stop: Callable[[], bool] | None = None,
     ) -> None:
         self.stocks = stocks
         self.provider = provider
@@ -30,6 +32,7 @@ class StockCollector:
         self.polygon_timespan = polygon_timespan
         self.publish_chunk_size = publish_chunk_size
         self.daily_market_days_ago = daily_market_days_ago
+        self.should_stop = should_stop
 
     def run_once(self) -> None:
         target_time = self._target_time_utc()
@@ -59,6 +62,10 @@ class StockCollector:
         payload: dict[str, list[dict[str, Any]]] = {}
 
         for stock in self.stocks:
+            if self._is_stopping():
+                logger.info("Stopping before building remaining stock payload")
+                break
+
             symbol = stock["symbol"]
             device_name = stock["device_name"]
 
@@ -98,6 +105,10 @@ class StockCollector:
 
         payload: dict[str, list[dict[str, Any]]] = {}
         for symbol, bar in bars.items():
+            if self._is_stopping():
+                logger.info("Stopping before building remaining grouped daily payload")
+                break
+
             payload[f"stock.{symbol}"] = [
                 {
                     "ts": self._telemetry_timestamp_ms(target_time, bar.timestamp_ms),
@@ -137,6 +148,10 @@ class StockCollector:
         published_chunks = 0
 
         for start in range(0, len(items), chunk_size):
+            if self._is_stopping():
+                logger.info("Stopping before publishing remaining telemetry chunks")
+                break
+
             chunk = dict(items[start : start + chunk_size])
             logger.info(
                 "Publishing telemetry chunk %s-%s of %s stock(s)",
@@ -148,6 +163,9 @@ class StockCollector:
             published_chunks += 1
 
         return published_chunks
+
+    def _is_stopping(self) -> bool:
+        return self.should_stop is not None and self.should_stop()
 
     def _should_fetch_all_stocks(self) -> bool:
         return any(stock["symbol"] in {"*", "ALL"} for stock in self.stocks)

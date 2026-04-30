@@ -17,6 +17,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 _should_stop = False
+_signal_count = 0
 
 
 def _is_stopping() -> bool:
@@ -24,8 +25,11 @@ def _is_stopping() -> bool:
 
 
 def _handle_signal(signum: int, frame: FrameType | None) -> None:
-    global _should_stop
+    global _should_stop, _signal_count
+    _signal_count += 1
     logger.info("Received signal %s, stopping...", signum)
+    if _should_stop:
+        raise KeyboardInterrupt
     _should_stop = True
 
 
@@ -57,6 +61,7 @@ def main() -> int:
         polygon_timespan=config.polygon_timespan,
         publish_chunk_size=config.publish_chunk_size,
         daily_market_days_ago=config.daily_market_days_ago,
+        should_stop=_is_stopping,
     )
 
     sink.connect()
@@ -69,6 +74,8 @@ def main() -> int:
                 break
             logger.info("Sleeping for %s second(s)", config.poll_interval_seconds)
             sleep_for_interval(config.poll_interval_seconds, should_stop=_is_stopping)
+    except KeyboardInterrupt:
+        logger.info("Interrupted, stopping now...")
     finally:
         sink.disconnect()
         logger.info("Stopped")
