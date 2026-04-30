@@ -314,7 +314,7 @@ Payload example:
 {
   "stock.AAPL": [
     {
-      "ts": 1777302300000,
+      "ts": 1777320000000,
       "values": {
         "open": 173.2,
         "high": 173.5,
