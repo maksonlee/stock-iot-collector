@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
+import time
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -10,6 +12,7 @@ import requests
 
 
 MARKET_TIMEZONE_NAME = "America/New_York"
+logger = logging.getLogger(__name__)
 
 try:
     MARKET_TIMEZONE = ZoneInfo(MARKET_TIMEZONE_NAME)
@@ -32,6 +35,10 @@ class AggregateBar:
     vwap: float | None = None
 
 
+class PolygonRequestError(RuntimeError):
+    pass
+
+
 class PolygonProvider:
     """
     Polygon/Massive daily aggregates provider.
@@ -40,9 +47,17 @@ class PolygonProvider:
     /v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}
     """
 
-    def __init__(self, api_key: str, timeout_seconds: int = 20) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        timeout_seconds: int = 20,
+        max_retries: int = 5,
+        retry_base_seconds: int = 60,
+    ) -> None:
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
+        self.max_retries = max(0, max_retries)
+        self.retry_base_seconds = max(1, retry_base_seconds)
         self.base_url = "https://api.polygon.io"
 
     def fetch_daily_bar(self, symbol: str, target_time_utc: datetime) -> AggregateBar | None:
@@ -62,10 +77,7 @@ class PolygonProvider:
             "apiKey": self.api_key,
         }
 
-        response = requests.get(url, params=params, timeout=self.timeout_seconds)
-        response.raise_for_status()
-
-        data = response.json()
+        data = self._get_json(url, params)
         results = data.get("results") or []
         if not results:
             return None
@@ -95,10 +107,7 @@ class PolygonProvider:
             "apiKey": self.api_key,
         }
 
-        response = requests.get(url, params=params, timeout=self.timeout_seconds)
-        response.raise_for_status()
-
-        data = response.json()
+        data = self._get_json(url, params)
         results = data.get("results") or []
         bars: dict[str, AggregateBar] = {}
 
@@ -120,3 +129,39 @@ class PolygonProvider:
             )
 
         return bars
+
+    def _get_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+        safe_path = url.removeprefix(self.base_url)
+
+        for attempt in range(self.max_retries + 1):
+            response = requests.get(url, params=params, timeout=self.timeout_seconds)
+            if response.status_code == 429 and attempt < self.max_retries:
+                wait_seconds = self._retry_wait_seconds(response, attempt)
+                logger.warning(
+                    "Polygon rate limited path=%s attempt=%s/%s, sleeping %s second(s)",
+                    safe_path,
+                    attempt + 1,
+                    self.max_retries + 1,
+                    wait_seconds,
+                )
+                time.sleep(wait_seconds)
+                continue
+
+            if response.status_code >= 400:
+                raise PolygonRequestError(
+                    f"Polygon request failed status={response.status_code} path={safe_path}"
+                )
+
+            return response.json()
+
+        raise PolygonRequestError(f"Polygon request failed after retries path={safe_path}")
+
+    def _retry_wait_seconds(self, response: requests.Response, attempt: int) -> int:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return max(1, int(float(retry_after)))
+            except ValueError:
+                pass
+
+        return self.retry_base_seconds * (attempt + 1)

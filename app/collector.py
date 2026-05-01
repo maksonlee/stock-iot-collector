@@ -31,7 +31,27 @@ class StockCollector:
         self.should_stop = should_stop
 
     def run_once(self) -> None:
-        target_time = self._target_time_utc()
+        self._run_for_days_ago(self.daily_market_days_ago)
+
+    def run_backfill(self, market_days: int) -> None:
+        days = max(0, market_days)
+        if days == 0:
+            logger.info("Backfill disabled")
+            return
+
+        logger.info("Starting backfill for %s U.S. market weekday(s)", days)
+        for days_ago in range(days, 0, -1):
+            if self._is_stopping():
+                logger.info("Stopping before remaining backfill days")
+                break
+
+            logger.info("Backfill progress: days_ago=%s", days_ago)
+            self._run_for_days_ago(days_ago)
+
+        logger.info("Backfill finished")
+
+    def _run_for_days_ago(self, days_ago: int) -> None:
+        target_time = self._target_time_utc(days_ago)
         logger.info(
             "Collecting target_time_utc=%s target_market_date=%s",
             target_time.isoformat(),
@@ -160,11 +180,11 @@ class StockCollector:
     def _should_fetch_all_stocks(self) -> bool:
         return any(stock["symbol"] in {"*", "ALL"} for stock in self.stocks)
 
-    def _target_time_utc(self) -> datetime:
+    def _target_time_utc(self, days_ago: int) -> datetime:
         return previous_weekday_market_time(
             utc_now(),
             MARKET_TIMEZONE,
-            self.daily_market_days_ago,
+            days_ago,
         )
 
     def _telemetry_timestamp_ms(self, target_time: datetime, bar_timestamp_ms: int) -> int:

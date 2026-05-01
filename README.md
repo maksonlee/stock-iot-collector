@@ -30,6 +30,7 @@ stock.TSLA
 - Daily telemetry includes `open`, `high`, `low`, `close`, `price`, `volume`, `vwap`, and `transaction_count` when Polygon provides them.
 - The ThingsBoard telemetry timestamp uses the market bar timestamp, not the publish time.
 - `bar_timestamp_ms` is also included in the values for easier inspection.
+- Set `BACKFILL_MARKET_DAYS` to run a one-time historical backfill, then exit.
 
 Example:
 
@@ -266,11 +267,29 @@ Optional environment variables:
 | --- | --- | --- |
 | `STOCK_CONFIG_PATH` | `./config/stocks.yaml` locally, otherwise `/etc/stock-iot-collector/stocks.yaml` | Stock config path. |
 | `DAILY_MARKET_DAYS_AGO` | `1` | Collect the previous N U.S. market weekdays. |
+| `BACKFILL_MARKET_DAYS` | `0` | When greater than `0`, run a one-time backfill for the previous N U.S. market weekdays, then exit. |
+| `POLYGON_MAX_RETRIES` | `5` | Number of retries for Polygon/Massive HTTP requests, especially rate-limit responses. |
+| `POLYGON_RETRY_BASE_SECONDS` | `60` | Base wait time for Polygon/Massive retry backoff when no `Retry-After` header is provided. |
 | `POLL_INTERVAL_SECONDS` | `3600` | How often the collector runs. |
 | `PUBLISH_CHUNK_SIZE` | `50` | Number of virtual devices per MQTT gateway telemetry message. Lower this if ThingsBoard is under pressure. |
 | `THINGSBOARD_MQTT_PORT` | `8883` | MQTT TLS port. |
 | `THINGSBOARD_MQTT_CLIENT_ID` | `stock-collector-01` | MQTT client id. |
 | `MQTT_KEEPALIVE_SECONDS` | `60` | MQTT keepalive. |
+
+## Historical Backfill
+
+To backfill the previous 90 U.S. market weekdays, run the collector with:
+
+```bash
+export BACKFILL_MARKET_DAYS="90"
+python -m app.main
+```
+
+Backfill mode runs once and exits. Do not set `BACKFILL_MARKET_DAYS` on the long-running Kubernetes Deployment, otherwise Kubernetes will restart the pod and repeat the backfill. For Kubernetes, run backfill as a temporary one-off pod or Job, then keep the normal Deployment on `BACKFILL_MARKET_DAYS=0`.
+
+For all U.S. stocks, 90 market days can publish more than one million telemetry points. If ThingsBoard is under pressure, reduce `PUBLISH_CHUNK_SIZE` and run the backfill during a quiet period.
+
+Polygon/Massive may return HTTP 429 during large backfills. The collector retries those requests without logging the API key. If your plan has a strict rate limit, keep `POLYGON_RETRY_BASE_SECONDS=60` or increase it.
 
 ## Stock Selection
 

@@ -42,7 +42,11 @@ def main() -> int:
 
     logger.info("Loaded %s stock(s), daily mode", len(stocks))
 
-    provider = PolygonProvider(api_key=config.polygon_api_key)
+    provider = PolygonProvider(
+        api_key=config.polygon_api_key,
+        max_retries=config.polygon_max_retries,
+        retry_base_seconds=config.polygon_retry_base_seconds,
+    )
     sink = ThingsBoardGatewaySink(
         host=config.thingsboard_mqtt_host,
         port=config.thingsboard_mqtt_port,
@@ -66,12 +70,15 @@ def main() -> int:
     logger.info("Connected to ThingsBoard MQTT host=%s port=%s", config.thingsboard_mqtt_host, config.thingsboard_mqtt_port)
 
     try:
-        while not _should_stop:
-            collector.run_once()
-            if _should_stop:
-                break
-            logger.info("Sleeping for %s second(s)", config.poll_interval_seconds)
-            sleep_for_interval(config.poll_interval_seconds, should_stop=_is_stopping)
+        if config.backfill_market_days > 0:
+            collector.run_backfill(config.backfill_market_days)
+        else:
+            while not _should_stop:
+                collector.run_once()
+                if _should_stop:
+                    break
+                logger.info("Sleeping for %s second(s)", config.poll_interval_seconds)
+                sleep_for_interval(config.poll_interval_seconds, should_stop=_is_stopping)
     except KeyboardInterrupt:
         logger.info("Interrupted, stopping now...")
     finally:

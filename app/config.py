@@ -14,6 +14,9 @@ class AppConfig:
     poll_interval_seconds: int
     publish_chunk_size: int
     daily_market_days_ago: int
+    backfill_market_days: int
+    polygon_max_retries: int
+    polygon_retry_base_seconds: int
 
     thingsboard_mqtt_host: str
     thingsboard_mqtt_port: int
@@ -57,6 +60,9 @@ def load_app_config() -> AppConfig:
         poll_interval_seconds=_get_int_env("POLL_INTERVAL_SECONDS", 3600),
         publish_chunk_size=_get_int_env("PUBLISH_CHUNK_SIZE", 50),
         daily_market_days_ago=_get_int_env("DAILY_MARKET_DAYS_AGO", 1),
+        backfill_market_days=_get_int_env("BACKFILL_MARKET_DAYS", 0),
+        polygon_max_retries=_get_int_env("POLYGON_MAX_RETRIES", 5),
+        polygon_retry_base_seconds=_get_int_env("POLYGON_RETRY_BASE_SECONDS", 60),
         thingsboard_mqtt_host=_get_required_env("THINGSBOARD_MQTT_HOST"),
         thingsboard_mqtt_port=_get_int_env("THINGSBOARD_MQTT_PORT", 8883),
         thingsboard_mqtt_client_id=os.getenv(
