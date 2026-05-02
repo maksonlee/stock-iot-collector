@@ -272,6 +272,7 @@ Optional environment variables:
 | `POLYGON_RETRY_BASE_SECONDS` | `60` | Base wait time for Polygon/Massive retry backoff when no `Retry-After` header is provided. |
 | `POLL_INTERVAL_SECONDS` | `3600` | How often the collector runs. |
 | `PUBLISH_CHUNK_SIZE` | `50` | Number of virtual devices per MQTT gateway telemetry message. Lower this if ThingsBoard is under pressure. |
+| `PUBLISH_CHUNK_DELAY_SECONDS` | `0.1` | Delay between MQTT publish chunks. Increase this if ThingsBoard drops or misses telemetry during large backfills. |
 | `THINGSBOARD_MQTT_PORT` | `8883` | MQTT TLS port. |
 | `THINGSBOARD_MQTT_CLIENT_ID` | `stock-collector-01` | MQTT client id. |
 | `MQTT_KEEPALIVE_SECONDS` | `60` | MQTT keepalive. |
@@ -285,9 +286,9 @@ export BACKFILL_MARKET_DAYS="90"
 python -m app.main
 ```
 
-Backfill mode runs once and exits. Do not set `BACKFILL_MARKET_DAYS` on the long-running Kubernetes Deployment, otherwise Kubernetes will restart the pod and repeat the backfill. For Kubernetes, run backfill as a temporary one-off pod or Job, then keep the normal Deployment on `BACKFILL_MARKET_DAYS=0`.
+Backfill mode runs once and exits. If any target market day fails to fetch or publish completely, the backfill stops immediately, exits with status code `1`, and logs the failed market date. Market-closed/no-data weekdays, such as U.S. exchange holidays, are logged as skipped and do not fail the backfill. Do not set `BACKFILL_MARKET_DAYS` on the long-running Kubernetes Deployment, otherwise Kubernetes will restart the pod and repeat the backfill. For Kubernetes, run backfill as a temporary one-off pod or Job, then keep the normal Deployment on `BACKFILL_MARKET_DAYS=0`.
 
-For all U.S. stocks, 90 market days can publish more than one million telemetry points. If ThingsBoard is under pressure, reduce `PUBLISH_CHUNK_SIZE` and run the backfill during a quiet period.
+For all U.S. stocks, 90 market days can publish more than one million telemetry points. If ThingsBoard is under pressure, reduce `PUBLISH_CHUNK_SIZE`, increase `PUBLISH_CHUNK_DELAY_SECONDS`, and run the backfill during a quiet period.
 
 Polygon/Massive may return HTTP 429 during large backfills. The collector retries those requests without logging the API key. If your plan has a strict rate limit, keep `POLYGON_RETRY_BASE_SECONDS=60` or increase it.
 

@@ -3,7 +3,7 @@ import signal
 import sys
 from types import FrameType
 
-from app.collector import StockCollector
+from app.collector import BackfillError, StockCollector
 from app.config import load_app_config, load_stock_config
 from app.providers.polygon import PolygonProvider
 from app.sinks.thingsboard import ThingsBoardGatewaySink
@@ -62,6 +62,7 @@ def main() -> int:
         provider=provider,
         sink=sink,
         publish_chunk_size=config.publish_chunk_size,
+        publish_chunk_delay_seconds=config.publish_chunk_delay_seconds,
         daily_market_days_ago=config.daily_market_days_ago,
         should_stop=_is_stopping,
     )
@@ -81,6 +82,9 @@ def main() -> int:
                 sleep_for_interval(config.poll_interval_seconds, should_stop=_is_stopping)
     except KeyboardInterrupt:
         logger.info("Interrupted, stopping now...")
+    except BackfillError:
+        logger.exception("Backfill did not complete successfully")
+        return 1
     finally:
         sink.disconnect()
         logger.info("Stopped")

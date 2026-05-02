@@ -13,6 +13,7 @@ class AppConfig:
 
     poll_interval_seconds: int
     publish_chunk_size: int
+    publish_chunk_delay_seconds: float
     daily_market_days_ago: int
     backfill_market_days: int
     polygon_max_retries: int
@@ -46,6 +47,16 @@ def _get_int_env(name: str, default: int) -> int:
         raise RuntimeError(f"Environment variable {name} must be an integer") from exc
 
 
+def _get_float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"Environment variable {name} must be a number") from exc
+
+
 def load_app_config() -> AppConfig:
     default_stock_config_path = "./config/stocks.yaml"
     if not Path(default_stock_config_path).exists():
@@ -59,6 +70,7 @@ def load_app_config() -> AppConfig:
         ),
         poll_interval_seconds=_get_int_env("POLL_INTERVAL_SECONDS", 3600),
         publish_chunk_size=_get_int_env("PUBLISH_CHUNK_SIZE", 50),
+        publish_chunk_delay_seconds=_get_float_env("PUBLISH_CHUNK_DELAY_SECONDS", 0.1),
         daily_market_days_ago=_get_int_env("DAILY_MARKET_DAYS_AGO", 1),
         backfill_market_days=_get_int_env("BACKFILL_MARKET_DAYS", 0),
         polygon_max_retries=_get_int_env("POLYGON_MAX_RETRIES", 5),
